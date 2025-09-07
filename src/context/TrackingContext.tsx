@@ -232,6 +232,10 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
       await adminAPI.login(username, password);
+      
+      // Clear localStorage to prevent mixing local and backend data
+      localStorage.removeItem('pps_trackings');
+      
       setIsAdmin(true);
       toast.success('Login successful');
       return true;

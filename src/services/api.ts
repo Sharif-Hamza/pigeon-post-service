@@ -161,14 +161,7 @@ export const adminAPI = {
 export const trackingAPI = {
   // Get all trackings (admin only)
   getAll: async (): Promise<TrackingItem[]> => {
-    try {
-      return await apiRequest('/tracking');
-    } catch (error) {
-      // Fallback to localStorage for development
-      console.warn('Using localStorage fallback for trackings');
-      const stored = localStorage.getItem(STORAGE_KEYS.TRACKINGS);
-      return stored ? JSON.parse(stored) : [];
-    }
+    return await apiRequest('/tracking');
   },
 
   // Get specific tracking
@@ -186,27 +179,10 @@ export const trackingAPI = {
 
   // Create new tracking (admin only)
   create: async (tracking: Omit<TrackingItem, 'trackingNumber' | 'id'>): Promise<TrackingItem> => {
-    try {
-      return await apiRequest('/tracking', {
-        method: 'POST',
-        body: JSON.stringify(tracking)
-      });
-    } catch (error) {
-      // Fallback to localStorage
-      console.warn('Using localStorage fallback for creating tracking');
-      const newTracking: TrackingItem = {
-        ...tracking,
-        trackingNumber: 'PPS' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase(),
-        status: 'processing'
-      };
-      
-      const stored = localStorage.getItem(STORAGE_KEYS.TRACKINGS);
-      const trackings: TrackingItem[] = stored ? JSON.parse(stored) : [];
-      trackings.push(newTracking);
-      localStorage.setItem(STORAGE_KEYS.TRACKINGS, JSON.stringify(trackings));
-      
-      return newTracking;
-    }
+    return await apiRequest('/tracking', {
+      method: 'POST',
+      body: JSON.stringify(tracking)
+    });
   },
 
   // Update tracking (admin only)
