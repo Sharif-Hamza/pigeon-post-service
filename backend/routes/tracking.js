@@ -111,11 +111,12 @@ router.get('/', (req, res) => {
   db.close();
 });
 
-// GET /api/tracking/:trackingNumber - Get specific tracking
+// GET /api/tracking/:trackingNumber - Get specific tracking with updates
 router.get('/:trackingNumber', (req, res) => {
   const { trackingNumber } = req.params;
   const db = getDatabase();
   
+  // Get tracking info
   db.get('SELECT * FROM trackings WHERE trackingNumber = ?', [trackingNumber], (err, row) => {
     if (err) {
       console.error('Database error:', err.message);
@@ -126,35 +127,44 @@ router.get('/:trackingNumber', (req, res) => {
       return res.status(404).json({ error: 'Tracking number not found' });
     }
     
-    // Update status and generate timeline
-    const newStatus = updateTrackingStatus(row);
-    const timeline = generateTimeline(row.estimatedDelivery, newStatus);
-    
-    const updatedTracking = {
-      ...row,
-      status: newStatus,
-      timeline: timeline
-    };
-    
-    // Update status in database if it changed
-    if (newStatus !== row.status) {
-      db.run('UPDATE trackings SET status = ?, updatedAt = CURRENT_TIMESTAMP WHERE trackingNumber = ?', 
-        [newStatus, trackingNumber], (updateErr) => {
-          if (updateErr) {
-            console.error('Error updating status:', updateErr.message);
-          }
-        });
-    }
-    
-    res.json(updatedTracking);
+    // Get all updates for this tracking
+    db.all('SELECT * FROM tracking_updates WHERE trackingNumber = ? ORDER BY timestamp ASC', 
+      [trackingNumber], (updateErr, updates) => {
+        if (updateErr) {
+          console.error('Database error:', updateErr.message);
+          return res.status(500).json({ error: 'Database error' });
+        }
+        
+        // Update status and generate timeline
+        const newStatus = updateTrackingStatus(row);
+        const timeline = generateTimeline(row.estimatedDelivery, newStatus);
+        
+        const updatedTracking = {
+          ...row,
+          status: newStatus,
+          timeline: timeline,
+          updates: updates || []
+        };
+        
+        // Update status in database if it changed
+        if (newStatus !== row.status) {
+          db.run('UPDATE trackings SET status = ?, updatedAt = CURRENT_TIMESTAMP WHERE trackingNumber = ?', 
+            [newStatus, trackingNumber], (statusUpdateErr) => {
+              if (statusUpdateErr) {
+                console.error('Error updating status:', statusUpdateErr.message);
+              }
+            });
+        }
+        
+        res.json(updatedTracking);
+        db.close();
+      });
   });
-  
-  db.close();
 });
 
 // POST /api/tracking - Create new tracking (admin only)
 router.post('/', (req, res) => {
-  const { sender, recipient, message, estimatedDelivery } = req.body;
+  const { sender, recipient, message, estimatedDelivery, senderAddress, recipientAddress } = req.body;
   
   if (!sender || !recipient || !message || !estimatedDelivery) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -166,37 +176,68 @@ router.post('/', (req, res) => {
   const db = getDatabase();
   
   const insertTracking = `
-    INSERT INTO trackings (trackingNumber, sender, recipient, message, estimatedDelivery)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO trackings (trackingNumber, sender, recipient, message, estimatedDelivery, senderAddress, recipientAddress)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
   
-  db.run(insertTracking, [trackingNumber, sender, recipient, message, estimatedDelivery], function(err) {
+  db.run(insertTracking, [trackingNumber, sender, recipient, message, estimatedDelivery, 
+    senderAddress || 'Pigeon Post Service', recipientAddress || 'Delivery Location'], function(err) {
     if (err) {
       console.error('Database error:', err.message);
       return res.status(500).json({ error: 'Failed to create tracking' });
     }
     
-    // Get the created tracking with timeline
-    db.get('SELECT * FROM trackings WHERE id = ?', [this.lastID], (err, row) => {
-      if (err) {
-        console.error('Database error:', err.message);
-        return res.status(500).json({ error: 'Database error' });
+    const trackingId = this.lastID;
+    
+    // Create initial tracking update
+    const insertInitialUpdate = `
+      INSERT INTO tracking_updates (trackingId, trackingNumber, status, location, description, emoji, createdBy)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    db.run(insertInitialUpdate, [
+      trackingId, 
+      trackingNumber, 
+      'processing', 
+      senderAddress || 'Pigeon Post Service',
+      'Your message has been received and is being prepared for pigeon delivery',
+      '📝',
+      'system'
+    ], (updateErr) => {
+      if (updateErr) {
+        console.error('Error creating initial update:', updateErr.message);
       }
       
-      const status = updateTrackingStatus(row);
-      const timeline = generateTimeline(row.estimatedDelivery, status);
-      
-      const createdTracking = {
-        ...row,
-        status,
-        timeline
-      };
-      
-      res.status(201).json(createdTracking);
+      // Get the created tracking with timeline and updates
+      db.get('SELECT * FROM trackings WHERE id = ?', [trackingId], (err, row) => {
+        if (err) {
+          console.error('Database error:', err.message);
+          return res.status(500).json({ error: 'Database error' });
+        }
+        
+        // Get the updates
+        db.all('SELECT * FROM tracking_updates WHERE trackingNumber = ? ORDER BY timestamp ASC', 
+          [trackingNumber], (updateErr, updates) => {
+            if (updateErr) {
+              console.error('Database error:', updateErr.message);
+            }
+            
+            const status = updateTrackingStatus(row);
+            const timeline = generateTimeline(row.estimatedDelivery, status);
+            
+            const createdTracking = {
+              ...row,
+              status,
+              timeline,
+              updates: updates || []
+            };
+            
+            res.status(201).json(createdTracking);
+            db.close();
+          });
+      });
     });
   });
-  
-  db.close();
 });
 
 // PUT /api/tracking/:trackingNumber - Update tracking (admin only)
@@ -243,6 +284,130 @@ router.put('/:trackingNumber', (req, res) => {
   });
   
   db.close();
+});
+
+// POST /api/tracking/:trackingNumber/updates - Add tracking update (admin only)
+router.post('/:trackingNumber/updates', (req, res) => {
+  const { trackingNumber } = req.params;
+  const { status, location, description, emoji, pigeonName } = req.body;
+  
+  if (!status || !location || !description) {
+    return res.status(400).json({ error: 'Status, location, and description are required' });
+  }
+  
+  const db = getDatabase();
+  
+  // First, get the tracking ID
+  db.get('SELECT id FROM trackings WHERE trackingNumber = ?', [trackingNumber], (err, tracking) => {
+    if (err) {
+      console.error('Database error:', err.message);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!tracking) {
+      return res.status(404).json({ error: 'Tracking number not found' });
+    }
+    
+    // Insert the update
+    const insertUpdate = `
+      INSERT INTO tracking_updates (trackingId, trackingNumber, status, location, description, emoji, pigeonName, createdBy)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'admin')
+    `;
+    
+    db.run(insertUpdate, [tracking.id, trackingNumber, status, location, description, emoji || '📦', pigeonName], function(err) {
+      if (err) {
+        console.error('Database error:', err.message);
+        return res.status(500).json({ error: 'Failed to add update' });
+      }
+      
+      // Update the main tracking status
+      db.run('UPDATE trackings SET status = ?, updatedAt = CURRENT_TIMESTAMP WHERE trackingNumber = ?', 
+        [status, trackingNumber], (updateErr) => {
+          if (updateErr) {
+            console.error('Error updating tracking status:', updateErr.message);
+          }
+          
+          // Return the created update
+          db.get('SELECT * FROM tracking_updates WHERE id = ?', [this.lastID], (getErr, newUpdate) => {
+            if (getErr) {
+              console.error('Database error:', getErr.message);
+              return res.status(500).json({ error: 'Database error' });
+            }
+            
+            res.status(201).json(newUpdate);
+            db.close();
+          });
+        });
+    });
+  });
+});
+
+// GET /api/tracking/:trackingNumber/updates - Get all updates for a tracking
+router.get('/:trackingNumber/updates', (req, res) => {
+  const { trackingNumber } = req.params;
+  const db = getDatabase();
+  
+  db.all('SELECT * FROM tracking_updates WHERE trackingNumber = ? ORDER BY timestamp ASC', 
+    [trackingNumber], (err, updates) => {
+      if (err) {
+        console.error('Database error:', err.message);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      res.json(updates || []);
+    });
+  
+  db.close();
+});
+
+// PUT /api/tracking/:trackingNumber/status - Update tracking status (admin only)
+router.put('/:trackingNumber/status', (req, res) => {
+  const { trackingNumber } = req.params;
+  const { status, location, description, emoji, pigeonName } = req.body;
+  
+  if (!status) {
+    return res.status(400).json({ error: 'Status is required' });
+  }
+  
+  const db = getDatabase();
+  
+  // Update the tracking status
+  db.run('UPDATE trackings SET status = ?, updatedAt = CURRENT_TIMESTAMP WHERE trackingNumber = ?', 
+    [status, trackingNumber], function(err) {
+      if (err) {
+        console.error('Database error:', err.message);
+        return res.status(500).json({ error: 'Failed to update status' });
+      }
+      
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Tracking number not found' });
+      }
+      
+      // If additional details provided, add as update
+      if (location && description) {
+        db.get('SELECT id FROM trackings WHERE trackingNumber = ?', [trackingNumber], (err, tracking) => {
+          if (err || !tracking) {
+            return res.json({ message: 'Status updated successfully' });
+          }
+          
+          const insertUpdate = `
+            INSERT INTO tracking_updates (trackingId, trackingNumber, status, location, description, emoji, pigeonName, createdBy)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'admin')
+          `;
+          
+          db.run(insertUpdate, [tracking.id, trackingNumber, status, location, description, emoji || '📦', pigeonName], (updateErr) => {
+            if (updateErr) {
+              console.error('Error adding update:', updateErr.message);
+            }
+            res.json({ message: 'Status updated successfully with details' });
+            db.close();
+          });
+        });
+      } else {
+        res.json({ message: 'Status updated successfully' });
+        db.close();
+      }
+    });
 });
 
 // DELETE /api/tracking/:trackingNumber - Delete tracking (admin only)

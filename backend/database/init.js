@@ -28,9 +28,30 @@ const initializeDatabase = () => {
         status TEXT NOT NULL DEFAULT 'processing',
         estimatedDelivery DATETIME NOT NULL,
         actualDelivery DATETIME NULL,
-        timeline TEXT NULL,
+        senderAddress TEXT DEFAULT 'Pigeon Post Service',
+        recipientAddress TEXT DEFAULT 'Delivery Location',
+        pigeonName TEXT NULL,
+        deliveryImages TEXT NULL,
+        deliveryVideos TEXT NULL,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
+    // Create tracking updates table for detailed status history
+    const createTrackingUpdatesTable = `
+      CREATE TABLE IF NOT EXISTS tracking_updates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trackingId INTEGER NOT NULL,
+        trackingNumber TEXT NOT NULL,
+        status TEXT NOT NULL,
+        location TEXT NOT NULL,
+        description TEXT NOT NULL,
+        emoji TEXT DEFAULT '📦',
+        pigeonName TEXT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        createdBy TEXT DEFAULT 'system',
+        FOREIGN KEY (trackingId) REFERENCES trackings (id) ON DELETE CASCADE
       )
     `;
 
@@ -64,6 +85,15 @@ const initializeDatabase = () => {
           return;
         }
         console.log('✅ Trackings table ready');
+      });
+
+      db.run(createTrackingUpdatesTable, (err) => {
+        if (err) {
+          console.error('❌ Error creating tracking updates table:', err.message);
+          reject(err);
+          return;
+        }
+        console.log('✅ Tracking updates table ready');
       });
 
       db.run(createAdminTable, (err) => {

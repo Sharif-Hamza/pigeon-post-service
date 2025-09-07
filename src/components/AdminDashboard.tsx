@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTracking, TrackingItem } from '@/context/TrackingContext';
 import CreateTrackingForm from '@/components/CreateTrackingForm';
 import EditTrackingForm from '@/components/EditTrackingForm';
+import TrackingUpdateForm from '@/components/TrackingUpdateForm';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -31,6 +32,7 @@ export default function AdminDashboard() {
   const [selectedTracking, setSelectedTracking] = useState<TrackingItem | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showUpdateForm, setShowUpdateForm] = useState(false);
   const { trackings, logout, clearAllData, forceStatusUpdate, isBackendAvailable } = useTracking();
   const navigate = useNavigate();
 
@@ -77,6 +79,7 @@ export default function AdminDashboard() {
       />
     );
   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-2 sm:p-4 overflow-x-hidden">
@@ -335,6 +338,18 @@ export default function AdminDashboard() {
                           variant="outline"
                           onClick={() => {
                             setSelectedTracking(tracking);
+                            setShowUpdateForm(true);
+                          }}
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Update
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedTracking(tracking);
                             setShowEditForm(true);
                           }}
                           className="border-amber-300 text-amber-700 hover:bg-amber-50"
@@ -418,6 +433,21 @@ export default function AdminDashboard() {
         </Tabs>
         </motion.div>
       </motion.div>
+
+      {/* Tracking Update Form Overlay */}
+      {showUpdateForm && selectedTracking && (
+        <TrackingUpdateForm
+          trackingNumber={selectedTracking.trackingNumber}
+          onUpdate={() => {
+            // Refresh the tracking data
+            window.location.reload();
+          }}
+          onClose={() => {
+            setShowUpdateForm(false);
+            setSelectedTracking(null);
+          }}
+        />
+      )}
     </div>
   );
 }

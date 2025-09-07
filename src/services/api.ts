@@ -245,6 +245,54 @@ export const trackingAPI = {
       const filtered = trackings.filter(t => t.trackingNumber !== trackingNumber);
       localStorage.setItem(STORAGE_KEYS.TRACKINGS, JSON.stringify(filtered));
     }
+  },
+
+  // Add tracking update (admin only)
+  addUpdate: async (trackingNumber: string, update: {
+    status: string;
+    location: string;
+    description: string;
+    emoji?: string;
+    pigeonName?: string;
+  }): Promise<any> => {
+    try {
+      return await apiRequest(`/tracking/${trackingNumber}/updates`, {
+        method: 'POST',
+        body: JSON.stringify(update)
+      });
+    } catch (error) {
+      console.error('Failed to add tracking update:', error);
+      throw error;
+    }
+  },
+
+  // Get tracking updates
+  getUpdates: async (trackingNumber: string): Promise<any[]> => {
+    try {
+      return await apiRequest(`/tracking/${trackingNumber}/updates`);
+    } catch (error) {
+      console.error('Failed to get tracking updates:', error);
+      return [];
+    }
+  },
+
+  // Update tracking status (admin only)
+  updateStatus: async (trackingNumber: string, statusData: {
+    status: string;
+    location?: string;
+    description?: string;
+    emoji?: string;
+    pigeonName?: string;
+  }): Promise<any> => {
+    try {
+      return await apiRequest(`/tracking/${trackingNumber}/status`, {
+        method: 'PUT',
+        body: JSON.stringify(statusData)
+      });
+    } catch (error) {
+      console.error('Failed to update tracking status:', error);
+      throw error;
+    }
   }
 };
 
