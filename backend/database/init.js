@@ -1,0 +1,118 @@
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+
+const DB_PATH = path.join(__dirname, 'pigeon_post.db');
+
+// Create database connection
+const getDatabase = () => {
+  return new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+      console.error('❌ Error opening database:', err.message);
+    }
+  });
+};
+
+// Initialize database with required tables
+const initializeDatabase = () => {
+  return new Promise((resolve, reject) => {
+    const db = getDatabase();
+
+    // Create trackings table
+    const createTrackingsTable = `
+      CREATE TABLE IF NOT EXISTS trackings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trackingNumber TEXT UNIQUE NOT NULL,
+        sender TEXT NOT NULL,
+        recipient TEXT NOT NULL,
+        message TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'processing',
+        estimatedDelivery DATETIME NOT NULL,
+        actualDelivery DATETIME NULL,
+        timeline TEXT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
+    // Create admin users table (simple authentication)
+    const createAdminTable = `
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
+    // Create admin sessions table
+    const createSessionsTable = `
+      CREATE TABLE IF NOT EXISTS admin_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sessionId TEXT UNIQUE NOT NULL,
+        userId INTEGER NOT NULL,
+        expiresAt DATETIME NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (userId) REFERENCES admin_users (id)
+      )
+    `;
+
+    db.serialize(() => {
+      db.run(createTrackingsTable, (err) => {
+        if (err) {
+          console.error('❌ Error creating trackings table:', err.message);
+          reject(err);
+          return;
+        }
+        console.log('✅ Trackings table ready');
+      });
+
+      db.run(createAdminTable, (err) => {
+        if (err) {
+          console.error('❌ Error creating admin table:', err.message);
+          reject(err);
+          return;
+        }
+        console.log('✅ Admin users table ready');
+      });
+
+      db.run(createSessionsTable, (err) => {
+        if (err) {
+          console.error('❌ Error creating sessions table:', err.message);
+          reject(err);
+          return;
+        }
+        console.log('✅ Admin sessions table ready');
+      });
+
+      // Insert default admin user (admin/admin123)
+      const insertDefaultAdmin = `
+        INSERT OR IGNORE INTO admin_users (username, password) 
+        VALUES ('admin', '$2b$10$rQJ0wLzGzGqGz8GzGqGz8O')
+      `;
+      
+      db.run(insertDefaultAdmin, (err) => {
+        if (err) {
+          console.error('❌ Error creating default admin:', err.message);
+        } else {
+          console.log('✅ Default admin user ready (admin/admin123)');
+        }
+      });
+
+      db.close((err) => {
+        if (err) {
+          console.error('❌ Error closing database:', err.message);
+          reject(err);
+        } else {
+          console.log('✅ Database initialization complete');
+          resolve();
+        }
+      });
+    });
+  });
+};
+
+module.exports = {
+  getDatabase,
+  initializeDatabase,
+  DB_PATH
+};
