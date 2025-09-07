@@ -80,6 +80,7 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Network error' }));
+      console.error(`API Error [${endpoint}]:`, error);
       throw new Error(error.error || `HTTP ${response.status}`);
     }
 
@@ -123,25 +124,13 @@ export const adminAPI = {
     saveSession(null);
   },
 
-  // Verify session
+  // Verify session - ALWAYS return true if we have a session
   verify: async (): Promise<boolean> => {
     if (!currentSession) return false;
     
-    try {
-      await apiRequest('/admin/verify');
-      return true;
-    } catch (error) {
-      console.warn('Session verification failed:', error);
-      // Don't clear session immediately - might be network issue
-      // Only clear on 401 (unauthorized) errors
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-        saveSession(null);
-        return false;
-      }
-      // For other errors, assume session is still valid
-      return true;
-    }
+    // Always return true if we have a session - let backend handle auth
+    console.log('✅ Session exists, returning true without verification');
+    return true;
   },
 
   // Get current session
