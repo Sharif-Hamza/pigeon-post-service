@@ -10,5 +10,5 @@
 
 [build.environment]
   NODE_VERSION = "18"
-  # Set your Railway backend API URL here (update after deployment)
-  VITE_API_URL = "https://your-railway-app.railway.app/api"
+  # Railway backend API URL
+  VITE_API_URL = "https://pps-production-a9a7.up.railway.app/api"
