@@ -38,6 +38,15 @@ const initializeDatabase = () => {
       )
     `;
 
+    // Add missing columns for existing databases
+    const addMissingColumns = [
+      'ALTER TABLE trackings ADD COLUMN senderAddress TEXT DEFAULT "Pigeon Post Service"',
+      'ALTER TABLE trackings ADD COLUMN recipientAddress TEXT DEFAULT "Delivery Location"',
+      'ALTER TABLE trackings ADD COLUMN pigeonName TEXT NULL',
+      'ALTER TABLE trackings ADD COLUMN deliveryImages TEXT NULL',
+      'ALTER TABLE trackings ADD COLUMN deliveryVideos TEXT NULL'
+    ];
+
     // Create tracking updates table for detailed status history
     const createTrackingUpdatesTable = `
       CREATE TABLE IF NOT EXISTS tracking_updates (
@@ -87,6 +96,22 @@ const initializeDatabase = () => {
           return;
         }
         console.log('✅ Trackings table ready');
+        
+        // Add missing columns if they don't exist
+        let columnsAdded = 0;
+        addMissingColumns.forEach((alterQuery, index) => {
+          db.run(alterQuery, (alterErr) => {
+            if (alterErr && !alterErr.message.includes('duplicate column name')) {
+              console.error(`⚠️ Could not add column ${index + 1}:`, alterErr.message);
+            } else if (!alterErr) {
+              console.log(`✅ Added missing column ${index + 1}`);
+            }
+            columnsAdded++;
+            if (columnsAdded === addMissingColumns.length) {
+              console.log('✅ Database columns updated');
+            }
+          });
+        });
       });
 
       db.run(createTrackingUpdatesTable, (err) => {
