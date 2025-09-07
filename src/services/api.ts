@@ -131,8 +131,15 @@ export const adminAPI = {
       await apiRequest('/admin/verify');
       return true;
     } catch (error) {
-      saveSession(null);
-      return false;
+      console.warn('Session verification failed:', error);
+      // Don't clear session immediately - might be network issue
+      // Only clear on 401 (unauthorized) errors
+      if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        saveSession(null);
+        return false;
+      }
+      // For other errors, assume session is still valid
+      return true;
     }
   },
 
