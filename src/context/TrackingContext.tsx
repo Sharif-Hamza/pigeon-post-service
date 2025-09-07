@@ -111,6 +111,11 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isBackendAvailable, setIsBackendAvailable] = useState(false);
 
+  // Clear localStorage on app start to prevent stale data
+  useEffect(() => {
+    localStorage.removeItem('pps_trackings');
+  }, []);
+
   // Check backend availability on mount
   useEffect(() => {
     const checkBackend = async () => {
@@ -118,8 +123,8 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       setIsBackendAvailable(available);
       
       if (!available) {
-        toast.warning('Backend not available, using local storage fallback');
-        setTrackings(sampleTrackings);
+        toast.error('Backend not available. Please check your connection.');
+        setTrackings([]); // Don't load sample data
       }
     };
 
@@ -152,6 +157,8 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   // Load trackings when admin state changes
   useEffect(() => {
     if (isAdmin) {
+      // Clear localStorage before loading to prevent mixing data
+      localStorage.removeItem('pps_trackings');
       loadTrackings();
     }
   }, [isAdmin]);
