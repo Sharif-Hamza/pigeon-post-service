@@ -439,8 +439,10 @@ export default function AdminDashboard() {
         <TrackingUpdateForm
           trackingNumber={selectedTracking.trackingNumber}
           onUpdate={() => {
-            // Refresh the tracking data
-            window.location.reload();
+            // Just close the form, don't reload the page
+            setShowUpdateForm(false);
+            setSelectedTracking(null);
+            // The data will be refreshed automatically
           }}
           onClose={() => {
             setShowUpdateForm(false);
