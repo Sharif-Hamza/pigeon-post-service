@@ -126,11 +126,24 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
     checkBackend();
   }, []);
 
-  // Check admin session on mount
+  // Check admin session on mount and restore from localStorage
   useEffect(() => {
     const checkAdminSession = async () => {
-      const isLoggedIn = await adminAPI.verify();
-      setIsAdmin(isLoggedIn);
+      // First check if we have a session in localStorage
+      const session = adminAPI.getSession();
+      if (session) {
+        // Try to verify with backend
+        const isValid = await adminAPI.verify();
+        if (isValid) {
+          setIsAdmin(true);
+        } else {
+          // Session invalid, clear it
+          await adminAPI.logout();
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
     };
 
     checkAdminSession();
