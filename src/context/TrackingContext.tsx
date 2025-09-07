@@ -137,17 +137,13 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       // First check if we have a session in localStorage
       const session = adminAPI.getSession();
       if (session) {
-        // Try to verify with backend
-        const isValid = await adminAPI.verify();
-        if (isValid) {
-          setIsAdmin(true);
-        } else {
-          // Session invalid, clear it
-          await adminAPI.logout();
-          setIsAdmin(false);
-        }
+        // If we have a session, assume user is admin
+        // Don't verify on mount to avoid clearing session
+        setIsAdmin(true);
+        console.log('✅ Admin session found, user is authenticated');
       } else {
         setIsAdmin(false);
+        console.log('❌ No admin session found');
       }
     };
 
@@ -244,6 +240,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('pps_trackings');
       
       setIsAdmin(true);
+      console.log('✅ Login successful, admin state set to true');
       toast.success('Login successful');
       return true;
     } catch (error) {

@@ -134,7 +134,8 @@ export const adminAPI = {
       console.warn('Session verification failed:', error);
       // Don't clear session immediately - might be network issue
       // Only clear on 401 (unauthorized) errors
-      if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
         saveSession(null);
         return false;
       }
