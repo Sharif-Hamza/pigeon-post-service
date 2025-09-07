@@ -1,5 +1,6 @@
 const express = require('express');
 const { getDatabase } = require('../database/init');
+const { verifyAdmin } = require('../lib/sessions');
 const router = express.Router();
 
 // Helper function to generate timeline
@@ -163,7 +164,7 @@ router.get('/:trackingNumber', (req, res) => {
 });
 
 // POST /api/tracking - Create new tracking (admin only)
-router.post('/', (req, res) => {
+router.post('/', verifyAdmin, (req, res) => {
   const { sender, recipient, message, estimatedDelivery, senderAddress, recipientAddress } = req.body;
   
   if (!sender || !recipient || !message || !estimatedDelivery) {
@@ -241,7 +242,7 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/tracking/:trackingNumber - Update tracking (admin only)
-router.put('/:trackingNumber', (req, res) => {
+router.put('/:trackingNumber', verifyAdmin, (req, res) => {
   const { trackingNumber } = req.params;
   const { sender, recipient, message, estimatedDelivery, status } = req.body;
   
@@ -287,7 +288,7 @@ router.put('/:trackingNumber', (req, res) => {
 });
 
 // POST /api/tracking/:trackingNumber/updates - Add tracking update (admin only)
-router.post('/:trackingNumber/updates', (req, res) => {
+router.post('/:trackingNumber/updates', verifyAdmin, (req, res) => {
   const { trackingNumber } = req.params;
   const { status, location, description, emoji, pigeonName } = req.body;
   
@@ -361,7 +362,7 @@ router.get('/:trackingNumber/updates', (req, res) => {
 });
 
 // PUT /api/tracking/:trackingNumber/status - Update tracking status (admin only)
-router.put('/:trackingNumber/status', (req, res) => {
+router.put('/:trackingNumber/status', verifyAdmin, (req, res) => {
   const { trackingNumber } = req.params;
   const { status, location, description, emoji, pigeonName } = req.body;
   
@@ -411,7 +412,7 @@ router.put('/:trackingNumber/status', (req, res) => {
 });
 
 // DELETE /api/tracking/:trackingNumber - Delete tracking (admin only)
-router.delete('/:trackingNumber', (req, res) => {
+router.delete('/:trackingNumber', verifyAdmin, (req, res) => {
   const { trackingNumber } = req.params;
   const db = getDatabase();
   

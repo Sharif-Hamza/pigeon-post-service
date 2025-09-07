@@ -1,14 +1,7 @@
 const express = require('express');
 const { getDatabase } = require('../database/init');
+const { activeSessions, generateSessionId, verifyAdmin } = require('../lib/sessions');
 const router = express.Router();
-
-// Simple session storage (in production, use Redis or similar)
-const activeSessions = new Map();
-
-// Generate session ID
-const generateSessionId = () => {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
-};
 
 // POST /api/admin/login - Admin login
 router.post('/login', (req, res) => {
@@ -71,23 +64,6 @@ router.get('/verify', (req, res) => {
   });
 });
 
-// Middleware to verify admin session
-const verifyAdmin = (req, res, next) => {
-  const sessionId = req.headers.authorization?.replace('Bearer ', '');
-  
-  if (!sessionId || !activeSessions.has(sessionId)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  
-  const session = activeSessions.get(sessionId);
-  if (new Date() > session.expiresAt) {
-    activeSessions.delete(sessionId);
-    return res.status(401).json({ error: 'Session expired' });
-  }
-  
-  req.adminUser = session;
-  next();
-};
 
 // GET /api/admin/stats - Get admin statistics
 router.get('/stats', verifyAdmin, (req, res) => {
