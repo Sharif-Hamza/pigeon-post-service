@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Force Railway URL for production
+const API_BASE_URL = 'https://pps-production-a9a7.up.railway.app/api';
 
 // Types
 export interface TrackingItem {
