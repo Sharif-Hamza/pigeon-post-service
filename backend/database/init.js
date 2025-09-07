@@ -65,15 +65,14 @@ const initializeDatabase = () => {
       )
     `;
 
-    // Create admin sessions table
+    // Create admin sessions table for persistent sessions
     const createSessionsTable = `
       CREATE TABLE IF NOT EXISTS admin_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sessionId TEXT UNIQUE NOT NULL,
-        userId INTEGER NOT NULL,
+        username TEXT NOT NULL,
         expiresAt DATETIME NOT NULL,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (userId) REFERENCES admin_users (id)
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `;
 

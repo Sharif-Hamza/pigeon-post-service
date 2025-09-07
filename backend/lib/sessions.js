@@ -1,43 +1,107 @@
-// Simple session storage (in production, use Redis or similar)
-const activeSessions = new Map();
+const { getDatabase } = require('../database/init');
 
 // Generate session ID
 const generateSessionId = () => {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  return 'admin-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2);
 };
 
-// Middleware to verify admin session
-const verifyAdmin = (req, res, next) => {
+// Create session in database
+const createSession = (sessionId, username, expiresAt) => {
+  return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    db.run(
+      'INSERT OR REPLACE INTO admin_sessions (sessionId, username, expiresAt) VALUES (?, ?, ?)',
+      [sessionId, username, expiresAt.toISOString()],
+      function(err) {
+        db.close();
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      }
+    );
+  });
+};
+
+// Get session from database
+const getSession = (sessionId) => {
+  return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    db.get(
+      'SELECT * FROM admin_sessions WHERE sessionId = ? AND expiresAt > datetime("now")',
+      [sessionId],
+      (err, row) => {
+        db.close();
+        if (err) {
+          reject(err);
+        } else {
+          resolve(row);
+        }
+      }
+    );
+  });
+};
+
+// Delete session from database
+const deleteSession = (sessionId) => {
+  return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    db.run(
+      'DELETE FROM admin_sessions WHERE sessionId = ?',
+      [sessionId],
+      function(err) {
+        db.close();
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      }
+    );
+  });
+};
+
+// Clean up expired sessions
+const cleanupExpiredSessions = () => {
+  const db = getDatabase();
+  db.run('DELETE FROM admin_sessions WHERE expiresAt <= datetime("now")', (err) => {
+    db.close();
+    if (err) {
+      console.error('Error cleaning up expired sessions:', err);
+    }
+  });
+};
+
+// Middleware to verify admin session using database
+const verifyAdmin = async (req, res, next) => {
   const sessionId = req.headers.authorization?.replace('Bearer ', '');
   
-  // Simple check - if it starts with 'admin-' and has the right format, allow it
-  // This is a temporary fix for Railway restarts clearing in-memory sessions
   if (!sessionId) {
     return res.status(401).json({ error: 'Unauthorized - Admin login required' });
   }
   
-  // Check if it's a valid admin session format or exists in memory
-  if (sessionId.startsWith('admin-') || activeSessions.has(sessionId)) {
-    // If it exists in memory, check expiration
-    if (activeSessions.has(sessionId)) {
-      const session = activeSessions.get(sessionId);
-      if (new Date() > session.expiresAt) {
-        activeSessions.delete(sessionId);
-        return res.status(401).json({ error: 'Session expired - Please login again' });
-      }
-      req.adminUser = session;
+  try {
+    const session = await getSession(sessionId);
+    if (session) {
+      req.adminUser = { username: session.username };
+      next();
     } else {
-      // Create a temporary session for valid admin tokens
-      req.adminUser = { username: 'admin' };
+      return res.status(401).json({ error: 'Invalid or expired session - Please login again' });
     }
-    next();
-  } else {
-    return res.status(401).json({ error: 'Unauthorized - Admin login required' });
+  } catch (error) {
+    console.error('Session verification error:', error);
+    return res.status(401).json({ error: 'Session verification failed' });
   }
 };
 
+// Clean up expired sessions every hour
+setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+
 module.exports = {
-  activeSessions,
   generateSessionId,
+  createSession,
+  getSession,
+  deleteSession,
   verifyAdmin
 };

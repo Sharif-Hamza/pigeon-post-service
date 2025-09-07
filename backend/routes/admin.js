@@ -1,10 +1,10 @@
 const express = require('express');
 const { getDatabase } = require('../database/init');
-const { activeSessions, generateSessionId, verifyAdmin } = require('../lib/sessions');
+const { generateSessionId, createSession, getSession, deleteSession, verifyAdmin } = require('../lib/sessions');
 const router = express.Router();
 
 // POST /api/admin/login - Admin login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   
   if (!username || !password) {
@@ -13,68 +13,64 @@ router.post('/login', (req, res) => {
   
   // Simple authentication (in production, use proper password hashing)
   if (username === 'admin' && password === 'admin123') {
-    // Create a persistent session ID that survives server restarts
-    const sessionId = 'admin-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2);
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    
-    activeSessions.set(sessionId, {
-      username,
-      expiresAt
-    });
-    
-    res.json({
-      success: true,
-      sessionId,
-      expiresAt,
-      message: 'Login successful'
-    });
+    try {
+      const sessionId = generateSessionId();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      await createSession(sessionId, username, expiresAt);
+      
+      res.json({
+        success: true,
+        sessionId,
+        expiresAt,
+        message: 'Login successful'
+      });
+    } catch (error) {
+      console.error('Session creation error:', error);
+      res.status(500).json({ error: 'Failed to create session' });
+    }
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
   }
 });
 
 // POST /api/admin/logout - Admin logout
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
   const { sessionId } = req.body;
   
-  if (sessionId && activeSessions.has(sessionId)) {
-    activeSessions.delete(sessionId);
+  if (sessionId) {
+    try {
+      await deleteSession(sessionId);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   }
   
   res.json({ message: 'Logged out successfully' });
 });
 
 // GET /api/admin/verify - Verify admin session
-router.get('/verify', (req, res) => {
+router.get('/verify', async (req, res) => {
   const sessionId = req.headers.authorization?.replace('Bearer ', '');
   
   if (!sessionId) {
     return res.status(401).json({ error: 'No session provided' });
   }
   
-  // Check if it's a valid admin session format or exists in memory
-  if (sessionId.startsWith('admin-') || activeSessions.has(sessionId)) {
-    if (activeSessions.has(sessionId)) {
-      const session = activeSessions.get(sessionId);
-      if (new Date() > session.expiresAt) {
-        activeSessions.delete(sessionId);
-        return res.status(401).json({ error: 'Session expired' });
-      }
+  try {
+    const session = await getSession(sessionId);
+    if (session) {
       res.json({ 
         valid: true, 
         username: session.username,
         expiresAt: session.expiresAt
       });
     } else {
-      // Valid admin session format, assume it's valid
-      res.json({ 
-        valid: true, 
-        username: 'admin',
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
-      });
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
-  } else {
-    return res.status(401).json({ error: 'Invalid session' });
+  } catch (error) {
+    console.error('Session verification error:', error);
+    return res.status(401).json({ error: 'Session verification failed' });
   }
 });
 
