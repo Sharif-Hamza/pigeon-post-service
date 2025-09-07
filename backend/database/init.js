@@ -65,9 +65,12 @@ const initializeDatabase = () => {
       )
     `;
 
+    // Drop and recreate admin sessions table to ensure correct schema
+    const dropSessionsTable = `DROP TABLE IF EXISTS admin_sessions`;
+    
     // Create admin sessions table for persistent sessions
     const createSessionsTable = `
-      CREATE TABLE IF NOT EXISTS admin_sessions (
+      CREATE TABLE admin_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sessionId TEXT UNIQUE NOT NULL,
         username TEXT NOT NULL,
@@ -104,37 +107,46 @@ const initializeDatabase = () => {
         console.log('✅ Admin users table ready');
       });
 
-      db.run(createSessionsTable, (err) => {
-        if (err) {
-          console.error('❌ Error creating sessions table:', err.message);
-          reject(err);
-          return;
-        }
-        console.log('✅ Admin sessions table ready');
-      });
-
-      // Insert default admin user (admin/admin123)
-      const insertDefaultAdmin = `
-        INSERT OR IGNORE INTO admin_users (username, password) 
-        VALUES ('admin', '$2b$10$rQJ0wLzGzGqGz8GzGqGz8O')
-      `;
-      
-      db.run(insertDefaultAdmin, (err) => {
-        if (err) {
-          console.error('❌ Error creating default admin:', err.message);
+      // Drop existing sessions table and recreate with correct schema
+      db.run(dropSessionsTable, (dropErr) => {
+        if (dropErr) {
+          console.log('⚠️ Could not drop sessions table (might not exist):', dropErr.message);
         } else {
-          console.log('✅ Default admin user ready (admin/admin123)');
+          console.log('🗑️ Dropped existing sessions table');
         }
-      });
-
-      db.close((err) => {
-        if (err) {
-          console.error('❌ Error closing database:', err.message);
-          reject(err);
-        } else {
-          console.log('✅ Database initialization complete');
-          resolve();
-        }
+        
+        db.run(createSessionsTable, (err) => {
+          if (err) {
+            console.error('❌ Error creating sessions table:', err.message);
+            reject(err);
+            return;
+          }
+          console.log('✅ Admin sessions table ready');
+          
+          // Insert default admin user (admin/admin123)
+          const insertDefaultAdmin = `
+            INSERT OR IGNORE INTO admin_users (username, password) 
+            VALUES ('admin', '$2b$10$rQJ0wLzGzGqGz8GzGqGz8O')
+          `;
+          
+          db.run(insertDefaultAdmin, (adminErr) => {
+            if (adminErr) {
+              console.error('❌ Error creating default admin:', adminErr.message);
+            } else {
+              console.log('✅ Default admin user ready (admin/admin123)');
+            }
+            
+            db.close((closeErr) => {
+              if (closeErr) {
+                console.error('❌ Error closing database:', closeErr.message);
+                reject(closeErr);
+              } else {
+                console.log('✅ Database initialization complete');
+                resolve();
+              }
+            });
+          });
+        });
       });
     });
   });

@@ -13,10 +13,13 @@ const createSession = (sessionId, username, expiresAt) => {
       'INSERT OR REPLACE INTO admin_sessions (sessionId, username, expiresAt) VALUES (?, ?, ?)',
       [sessionId, username, expiresAt.toISOString()],
       function(err) {
-        db.close();
         if (err) {
+          console.error('❌ Database error in createSession:', err);
+          db.close();
           reject(err);
         } else {
+          console.log('✅ Session created successfully:', sessionId);
+          db.close();
           resolve();
         }
       }

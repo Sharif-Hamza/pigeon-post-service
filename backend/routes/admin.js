@@ -13,18 +13,13 @@ router.post('/login', async (req, res) => {
   
   // Simple authentication (in production, use proper password hashing)
   if (username === 'admin' && password === 'admin123') {
+    const sessionId = generateSessionId();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
     try {
-      const sessionId = generateSessionId();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-      
-      // Try to create session in database, but don't fail if it doesn't work
-      try {
-        await createSession(sessionId, username, expiresAt);
-        console.log('✅ Session created in database');
-      } catch (dbError) {
-        console.error('⚠️ Database session creation failed, but continuing:', dbError.message);
-        // Continue anyway - the session will work for this server instance
-      }
+      // Create session in database
+      await createSession(sessionId, username, expiresAt);
+      console.log('✅ Database session created successfully');
       
       res.json({
         success: true,
@@ -32,9 +27,12 @@ router.post('/login', async (req, res) => {
         expiresAt,
         message: 'Login successful'
       });
-    } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({ error: 'Login failed' });
+    } catch (dbError) {
+      console.error('❌ Failed to create session:', dbError);
+      res.status(500).json({ 
+        error: 'Failed to create session',
+        details: dbError.message 
+      });
     }
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
